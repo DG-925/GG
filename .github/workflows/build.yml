@@ -1,0 +1,35 @@
+# Builds, tests and publishes GG on a Windows machine on every push.
+# The single-file GG.exe is attached to each run as a downloadable artifact.
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore GG.sln
+
+      - name: Build
+        run: dotnet build GG.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test tests/GG.Tests -c Release --no-build --logger "console;verbosity=normal"
+
+      - name: Publish single-file exe
+        run: dotnet publish src/GG.App/GG.App.csproj -c Release -r win-x64 -o publish
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GG-win-x64
+          path: publish/GG.exe
