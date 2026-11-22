@@ -6,7 +6,7 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource WindowBrush}"
         Foreground="{StaticResource TextPrimaryBrush}"
-        FontFamily="{StaticResource UiFont}" FontSize="13"
+        FontFamily="{StaticResource UiFont}" FontSize="13" FontWeight="SemiBold"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display">
 
@@ -75,6 +75,13 @@
                 <!-- Footer -->
                 <StackPanel Grid.Row="2" Margin="0,10,0,0">
                     <Button Style="{StaticResource SubtleButton}" HorizontalContentAlignment="Left"
+                            Command="{Binding ChooseShortcutFolderCommand}" ToolTip="Pick the folder of game shortcuts (.lnk / .url) to import">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE71B;" FontFamily="{StaticResource IconFont}" FontSize="14" VerticalAlignment="Center" />
+                            <TextBlock Text="Shortcut folder..." Margin="12,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource SubtleButton}" HorizontalContentAlignment="Left"
                             Command="{Binding OpenDataFolderCommand}" ToolTip="Open %AppData%\GG (library.json, settings.json, logs)">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE838;" FontFamily="{StaticResource IconFont}" FontSize="14" VerticalAlignment="Center" />
@@ -133,7 +140,7 @@
 
             <!-- Section title + count -->
             <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="28,14,28,10">
-                <TextBlock Text="{Binding HeaderTitle}" FontFamily="{StaticResource DisplayFont}" FontSize="26" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding HeaderTitle}" FontFamily="{StaticResource DisplayFont}" FontSize="26" FontWeight="Bold" />
                 <TextBlock Foreground="{StaticResource TextMutedBrush}" FontSize="14" VerticalAlignment="Bottom" Margin="12,0,0,5">
                     <Run Text="{Binding VisibleCount, Mode=OneWay}" /><Run Text=" games" />
                 </TextBlock>
@@ -157,7 +164,7 @@
                 <TextBlock Text="&#xE7FC;" FontFamily="{StaticResource IconFont}" FontSize="48"
                            Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
                 <TextBlock Text="No games here" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,14,0,4" />
-                <TextBlock Text="Try another filter, clear the search, or press Scan." Foreground="{StaticResource TextSecondaryBrush}"
+                <TextBlock Text="Press Scan and pick your folder of game shortcuts, or try another filter." Foreground="{StaticResource TextSecondaryBrush}"
                            HorizontalAlignment="Center" />
             </StackPanel>
 
@@ -165,7 +172,29 @@
             <Border Grid.Row="3" Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource BorderBrush}"
                     BorderThickness="0,1,0,0" Padding="28,7"
                     Visibility="{Binding StatusMessage, Converter={StaticResource NullToCollapsed}}">
-                <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                <StackPanel Orientation="Horizontal">
+                    <!-- Spinning icon while a scan runs. -->
+                    <TextBlock Text="&#xE72C;" FontFamily="{StaticResource IconFont}" FontSize="12" FontWeight="Normal"
+                               Foreground="{StaticResource AccentHoverBrush}" VerticalAlignment="Center" Margin="0,0,10,0"
+                               RenderTransformOrigin="0.5,0.5"
+                               Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock.RenderTransform>
+                            <RotateTransform />
+                        </TextBlock.RenderTransform>
+                        <TextBlock.Triggers>
+                            <EventTrigger RoutedEvent="Loaded">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                         From="0" To="360" Duration="0:0:1" RepeatBehavior="Forever" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </TextBlock.Triggers>
+                    </TextBlock>
+                    <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                </StackPanel>
             </Border>
         </Grid>
     </Grid>

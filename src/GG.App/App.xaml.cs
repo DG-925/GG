@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
+using GG.App.Services;
 using GG.App.ViewModels;
 using GG.App.Views;
 using GG.Core.Logging;
@@ -78,18 +79,32 @@ public partial class App : Application
                 && GameSourceInfo.Launchers.Contains(g.Source) && !installedLaunchers.Contains(g.Source));
         }
 
-        var window = new MainWindow { DataContext = new MainViewModel(_library, _settings, paths, installedLaunchers) };
+        var window = new MainWindow { DataContext = new MainViewModel(_library, _settings, paths, installedLaunchers,
+            new DialogService(), ScanCoordinator.CreateDefault()) };
         MainWindow = window;
         if (_smokeTest)
         {
             window.ContentRendered += async (_, _) =>
             {
-                await Task.Delay(TimeSpan.FromSeconds(3)); // let bindings, hover styles and layout settle
+                await Task.Delay(TimeSpan.FromSeconds(2)); // let bindings, hover styles and layout settle
+
+                // Also exercise a real scan when the test data folder has a shortcut folder configured.
+                if (window.DataContext is MainViewModel smokeVm)
+                {
+                    smokeVm.StartupScan();
+                    while (smokeVm.IsScanning)
+                        await Task.Delay(200);
+                    await Task.Delay(TimeSpan.FromSeconds(1));
+                }
+
                 Log.Info("Smoke test passed.");
                 Shutdown(0);
             };
         }
         window.Show();
+
+        if (!_smokeTest && window.DataContext is MainViewModel vm)
+            vm.StartupScan();
     }
 
     protected override void OnExit(ExitEventArgs e)

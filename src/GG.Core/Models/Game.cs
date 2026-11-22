@@ -19,13 +19,24 @@ public sealed class Game
     /// </summary>
     public string? SourceId { get; set; }
 
+    /// <summary>
+    /// Every id this game is known by, keyed by source name (e.g. "Steam" → "367520", "Shortcut" → the .lnk path).
+    /// When a shortcut and a launcher find the same game they merge into one entry that keeps both ids,
+    /// so rescans recognise it from either side and Steam covers can still use the appid.
+    /// </summary>
+    public Dictionary<string, string> ExternalIds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Root folder of the installed game, if known.</summary>
     public string? InstallPath { get; set; }
 
     /// <summary>The executable to start. Either this or <see cref="LaunchUri"/> is used to launch.</summary>
     public string? ExePath { get; set; }
 
-    /// <summary>URI handled by a launcher (steam://..., com.epicgames.launcher://..., shell:AppsFolder\...).</summary>
+    /// <summary>
+    /// What to hand to the Windows shell to start the game: a launcher URI (steam://..., com.epicgames.launcher://...,
+    /// shell:AppsFolder\...) or a shortcut file that has no plain exe target (Store app shortcuts).
+    /// Used instead of <see cref="ExePath"/> when set.
+    /// </summary>
     public string? LaunchUri { get; set; }
 
     public string? Arguments { get; set; }
@@ -48,6 +59,9 @@ public sealed class Game
 
     public DateTime DateAdded { get; set; } = DateTime.Now;
 
+    /// <summary>True once the user renamed the game; scans keep the user's name.</summary>
+    public bool UserRenamed { get; set; }
+
     /// <summary>True once the user picked the exe by hand; scans must never overwrite it.</summary>
     public bool UserOverrodeExe { get; set; }
 
@@ -65,8 +79,22 @@ public sealed class Game
     {
         var copy = (Game)MemberwiseClone();
         copy.ExeCandidates = ExeCandidates is null ? null : new List<string>(ExeCandidates);
+        copy.ExternalIds = new Dictionary<string, string>(ExternalIds ?? new(), StringComparer.OrdinalIgnoreCase);
         return copy;
     }
+
+    /// <summary>Records an id for <paramref name="source"/> (ignored when empty).</summary>
+    public void SetExternalId(GameSource source, string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return;
+        ExternalIds ??= new(StringComparer.OrdinalIgnoreCase);
+        ExternalIds[source.ToString()] = id;
+    }
+
+    /// <summary>The id this game has in <paramref name="source"/>, or null.</summary>
+    public string? GetExternalId(GameSource source) =>
+        ExternalIds is not null && ExternalIds.TryGetValue(source.ToString(), out var id) ? id : null;
 
     public override string ToString() => $"{Name} ({Source})";
 }

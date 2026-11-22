@@ -22,6 +22,7 @@
         <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToolTip">
@@ -71,7 +72,7 @@
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Background" Value="{StaticResource AccentBrush}" />
         <Setter Property="Foreground" Value="White" />
-        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontWeight" Value="Bold" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -437,7 +438,7 @@
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
                             <Setter TargetName="Marker" Property="Visibility" Value="Visible" />
                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-                            <Setter Property="FontWeight" Value="Medium" />
+                            <Setter Property="FontWeight" Value="Bold" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

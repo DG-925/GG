@@ -86,6 +86,15 @@ public sealed class GameLibrary
         RequestSave();
     }
 
+    /// <summary>Replaces the whole library (after a scan merge) and saves soon.</summary>
+    public void ReplaceAll(IEnumerable<Game> games)
+    {
+        lock (_sync)
+            _games = games.ToList();
+        Changed?.Invoke(this, EventArgs.Empty);
+        RequestSave();
+    }
+
     public void Remove(string id)
     {
         lock (_sync)

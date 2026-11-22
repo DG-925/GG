@@ -27,16 +27,27 @@ jobs:
       - name: Publish single-file exe
         run: dotnet publish src/GG.App/GG.App.csproj -c Release -r win-x64 -o publish
 
-      # Start the real exe with a throwaway data folder; it closes itself after rendering.
-      # Exit code 1 (or hanging) means it crashed on startup; the log is printed either way.
-      - name: Smoke test (start GG.exe)
+      # Start the real exe with a throwaway data folder and a small shortcut folder (one .lnk, one .url).
+      # It scans, then closes itself. A crash, a hang or a wrong game count fails the build; the log is printed either way.
+      - name: Smoke test (start GG.exe and scan shortcuts)
         shell: pwsh
         run: |
-          $env:GG_DATA_DIR = Join-Path $env:RUNNER_TEMP "gg-smoke"
+          $data = Join-Path $env:RUNNER_TEMP "gg-smoke"
+          $shortcuts = Join-Path $env:RUNNER_TEMP "gg-shortcuts"
+          New-Item -ItemType Directory -Force $data, $shortcuts | Out-Null
+          $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $shortcuts "Notepad Test.lnk"))
+          $lnk.TargetPath = "$env:WINDIR\System32\notepad.exe"
+          $lnk.Save()
+          Set-Content (Join-Path $shortcuts "Portal 2.url") "[InternetShortcut]`r`nURL=steam://rungameid/620"
+          @{ ShortcutFolder = $shortcuts; RescanOnStartup = $true } | ConvertTo-Json | Set-Content (Join-Path $data "settings.json")
+
+          $env:GG_DATA_DIR = $data
           $p = Start-Process -FilePath publish/GG.exe -ArgumentList "--smoke-test" -PassThru
           if (-not $p.WaitForExit(120000)) { $p.Kill(); Write-Error "GG did not exit within 2 minutes" }
-          Get-Content (Join-Path $env:GG_DATA_DIR "logs/gg.log") -ErrorAction SilentlyContinue
+          $log = Get-Content (Join-Path $data "logs/gg.log") -Raw -ErrorAction SilentlyContinue
+          Write-Output $log
           if ($p.ExitCode -ne 0) { Write-Error "GG exited with code $($p.ExitCode)"; exit 1 }
+          if ($log -notmatch "Found 2 games: 2 Shortcuts") { Write-Error "Shortcut scan did not find the 2 test games"; exit 1 }
 
       - uses: actions/upload-artifact@v4
         with:

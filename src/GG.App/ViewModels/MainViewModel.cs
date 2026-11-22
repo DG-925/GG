@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Windows.Data;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -9,6 +10,8 @@ using GG.Core.Logging;
 using GG.Core.Models;
 using GG.Core.Services;
 using GG.Core.Storage;
+using GG.App.Services;
+using GG.Scanners;
 
 namespace GG.App.ViewModels;
 
@@ -21,6 +24,8 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
     private readonly SettingsService _settings;
     private readonly AppPaths _paths;
     private readonly IReadOnlySet<GameSource> _installedLaunchers;
+    private readonly IDialogService _dialogs;
+    private readonly ScanCoordinator _scanner;
     private readonly Dispatcher _dispatcher;
     // The grid is rebuilt as a whole (new list + new view) whenever the library changes.
     // Mutating a view while its refresh is deferred throws in WPF, so we never edit it in place.
@@ -31,9 +36,17 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
     private readonly SidebarItemViewModel[] _fixedItems;
 
     /// <param name="installedLaunchers">Launchers found on this PC; only these get a sidebar entry.</param>
-    public MainViewModel(GameLibrary library, SettingsService settings, AppPaths paths, IReadOnlySet<GameSource> installedLaunchers)
+    public MainViewModel(
+        GameLibrary library,
+        SettingsService settings,
+        AppPaths paths,
+        IReadOnlySet<GameSource> installedLaunchers,
+        IDialogService dialogs,
+        ScanCoordinator scanner)
     {
         _installedLaunchers = installedLaunchers;
+        _dialogs = dialogs;
+        _scanner = scanner;
         _library = library;
         _settings = settings;
         _paths = paths;
@@ -92,6 +105,10 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
     [ObservableProperty]
     private string? _statusMessage;
 
+    /// <summary>True while a scan runs (shows the spinner; the Scan button disables itself).</summary>
+    [ObservableProperty]
+    private bool _isScanning;
+
     public string HeaderTitle => SelectedSidebarItem?.Title ?? "All Games";
 
     // ----- Property change hooks -----
@@ -132,11 +149,89 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
 
     // ----- Commands -----
 
+    /// <summary>
+    /// Scans every source in the background and merges the results into the library.
+    /// The first time, asks for the shortcut folder.
+    /// </summary>
     [RelayCommand]
-    private void Scan()
+    private async Task ScanAsync()
     {
-        // Real scanning arrives in step 2 (shortcuts) and step 3 (launchers).
-        StatusMessage = "Scanning isn't wired up yet - it arrives in step 2 (shortcuts) and step 3 (launchers).";
+        if (string.IsNullOrWhiteSpace(_settings.Current.ShortcutFolder) && !ChooseShortcutFolderCore())
+            return;
+
+        IsScanning = true;
+        StatusMessage = "Scanning for games...";
+        try
+        {
+            var progress = new Progress<string>(text => StatusMessage = text); // reports land on the UI thread
+            var context = new ScanContext(_settings.Current, progress);
+
+            var results = await Task.Run(() => _scanner.ScanAsync(context));
+
+            var scanned = results.SelectMany(r => r.Games).ToList();
+            var scannedSources = results.Where(r => r.SourceAvailable).Select(r => r.Source).ToHashSet();
+            var existing = _library.Games;
+            var merge = await Task.Run(() => LibraryMerger.Merge(existing, scanned, scannedSources));
+
+            _library.ReplaceAll(merge.Games);
+            StatusMessage = BuildSummary(merge, results);
+            Log.Info(StatusMessage);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Scan failed", ex);
+            StatusMessage = $"Scan failed: {ex.Message}";
+        }
+        finally
+        {
+            IsScanning = false;
+        }
+    }
+
+    /// <summary>Lets the user pick (or change) the shortcut folder, then rescans.</summary>
+    [RelayCommand]
+    private async Task ChooseShortcutFolderAsync()
+    {
+        if (ChooseShortcutFolderCore())
+            await ScanAsync();
+    }
+
+    private bool ChooseShortcutFolderCore()
+    {
+        var folder = _dialogs.PickFolder("Choose the folder that holds your game shortcuts", _settings.Current.ShortcutFolder);
+        if (folder is null)
+            return false;
+
+        _settings.Current.ShortcutFolder = folder;
+        _settings.RequestSave();
+        return true;
+    }
+
+    /// <summary>"Found 165 games: 120 Shortcuts, 40 Steam, 5 Epic Games (+3 new, 1 removed)".</summary>
+    private string BuildSummary(MergeResult merge, IReadOnlyList<ScanResult> results)
+    {
+        var visible = merge.Games.Where(g => !g.IsHidden).ToList();
+        var parts = visible.GroupBy(g => g.Source)
+            .OrderByDescending(g => g.Count())
+            .Select(g => $"{g.Count()} {g.Key.DisplayName()}");
+
+        var summary = $"Found {visible.Count} games";
+        if (visible.Count > 0)
+            summary += ": " + string.Join(", ", parts);
+
+        var changes = new List<string>();
+        if (merge.Added > 0) changes.Add($"+{merge.Added} new");
+        if (merge.Removed > 0) changes.Add($"{merge.Removed} removed");
+        if (changes.Count > 0)
+            summary += $" ({string.Join(", ", changes)})";
+
+        // Mention sources that couldn't be read (e.g. the shortcut folder was moved).
+        var problems = results.Where(r => !r.SourceAvailable && r.Message is not null && r.Source == GameSource.Shortcut)
+            .Select(r => r.Message);
+        foreach (var problem in problems)
+            summary += $". {problem}";
+
+        return summary;
     }
 
     [RelayCommand]
@@ -161,8 +256,53 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
 
     public void Play(GameViewModel game)
     {
-        // Launching arrives in step 2.
-        StatusMessage = $"Launching \"{game.Name}\" arrives in step 2.";
+        var result = GameLauncher.Launch(game.Model);
+        if (result.Success)
+        {
+            game.Model.LastPlayed = DateTime.Now; // playtime tracking arrives in step 6
+            game.Refresh();
+            _library.RequestSave();
+            UpdateCounts();
+            StatusMessage = result.Message;
+            return;
+        }
+
+        if (result.Error == LaunchError.Cancelled)
+        {
+            StatusMessage = result.Message;
+            return;
+        }
+
+        // Offer "Locate exe..." unless the game is started through a launcher URI that we can't fix by picking a file.
+        var canLocate = result.Error is LaunchError.MissingFile or LaunchError.NothingToLaunch or LaunchError.Failed;
+        if (_dialogs.ShowLaunchError(game.Name, result.Message, canLocate) != LaunchErrorChoice.LocateExe)
+            return;
+
+        var startFolder = Directory.Exists(game.Model.InstallPath ?? "") ? game.Model.InstallPath
+            : Path.GetDirectoryName(game.Model.ExePath ?? "");
+        var exe = _dialogs.PickExe($"Locate the program that starts {game.Name}", startFolder);
+        if (exe is null)
+            return;
+
+        // The user's choice wins from now on: later scans never overwrite it.
+        var model = game.Model;
+        model.ExePath = exe;
+        model.WorkingDirectory = Path.GetDirectoryName(exe);
+        model.LaunchUri = null;
+        model.InstallPath ??= Path.GetDirectoryName(exe);
+        model.UserOverrodeExe = true;
+        model.NeedsReview = false;
+        game.Refresh();
+        _library.RequestSave();
+
+        Play(game);
+    }
+
+    /// <summary>Runs a scan right after start-up when "rescan on startup" is on and there is something to scan.</summary>
+    public void StartupScan()
+    {
+        if (_settings.Current.RescanOnStartup && !string.IsNullOrWhiteSpace(_settings.Current.ShortcutFolder))
+            ScanCommand.Execute(null);
     }
 
     public void ToggleFavorite(GameViewModel game)

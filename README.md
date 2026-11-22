@@ -21,8 +21,8 @@ GG is being built in steps:
 | Step | What | State |
 |------|------|-------|
 | 1 | Project setup, game model, JSON save/load, dark grid with test data | **done** |
-| 2 | Shortcut import + launching | next |
-| 3 | Steam, Epic, Xbox scanners | |
+| 2 | Shortcut import + launching | **done** |
+| 3 | Steam, Epic, Xbox scanners | next |
 | 4 | Folder scan + exe picking rules + "Needs review" dialog | |
 | 5 | Cover art (SteamGridDB) and icons | |
 | 6 | Playtime, favorites, recently played, search, sort, right-click menu | |
@@ -81,8 +81,20 @@ tests/
 - If `library.json` ever becomes unreadable, GG copies it to `library.corrupt-<date>.json`, loads the `.bak` instead, and logs what happened.
 - Small changes (toggling a favorite, moving the size slider) are batched and written about a second later, and always on exit.
 
+## How scanning works (so far)
+
+- **Shortcuts:** pick a folder of `.lnk` / `.url` files (subfolders included). Each shortcut's file name becomes the game
+  name. `.lnk` files are resolved to their exe, arguments and working folder. `.url` files can be `steam://`,
+  `com.epicgames.launcher://` or `file://` links; web links, uninstallers and readmes are skipped.
+- **Duplicates:** the same game found twice is merged into one entry, matched by a shared id (Steam appid, Epic app name),
+  then by install folder, then by name with punctuation ignored. The launch details come from the highest-priority source:
+  your own choice (Locate exe...) > shortcut > launcher > folder scan.
+- **Rescans** keep each game's favorite flag, hidden flag, playtime and date added. A shortcut you delete disappears from
+  GG on the next scan, unless it's a favorite or has playtime.
+- **Launching** uses the launcher URI if there is one, otherwise the exe with its arguments and working folder. If the file
+  is gone, GG offers **Locate exe...**. The exe you pick is kept forever and never overwritten by scans.
+
 ## Resetting
 
-Close GG and delete `%AppData%\GG` to start fresh. (During development, a brand-new library is filled
-with sample games so the grid has something to show. They're removed automatically on the first real
-import in step 2.)
+Close GG and delete `%AppData%\GG` to start fresh. (A brand-new library shows a few sample games until
+your first scan, which removes them.)
