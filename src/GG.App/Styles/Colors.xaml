@@ -32,8 +32,9 @@
 
     <!-- Icon font: Segoe Fluent Icons on Windows 11, Segoe MDL2 Assets on Windows 10. -->
     <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
-    <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
-    <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI</FontFamily>
+    <!-- Inter is embedded in GG.exe (Fonts/); Segoe UI is only a fallback. "Inter Display" is the tighter cut for big titles. -->
+    <FontFamily x:Key="UiFont">/GG;component/Fonts/#Inter, Segoe UI</FontFamily>
+    <FontFamily x:Key="DisplayFont">/GG;component/Fonts/#Inter Display, Segoe UI</FontFamily>
 
     <sys:Double x:Key="CornerSize">10</sys:Double>
     <CornerRadius x:Key="CardCorner">10</CornerRadius>

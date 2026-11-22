@@ -20,6 +20,11 @@
     <DebugType>embedded</DebugType>
   </PropertyGroup>
 
+  <!-- Inter font (SIL Open Font License, see Fonts/Inter-LICENSE.txt), embedded so GG looks the same on every PC. -->
+  <ItemGroup>
+    <Resource Include="Fonts\*.ttf" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
   </ItemGroup>

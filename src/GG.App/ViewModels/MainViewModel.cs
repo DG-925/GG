@@ -20,6 +20,7 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
     private readonly GameLibrary _library;
     private readonly SettingsService _settings;
     private readonly AppPaths _paths;
+    private readonly IReadOnlySet<GameSource> _installedLaunchers;
     private readonly Dispatcher _dispatcher;
     // The grid is rebuilt as a whole (new list + new view) whenever the library changes.
     // Mutating a view while its refresh is deferred throws in WPF, so we never edit it in place.
@@ -29,8 +30,10 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
     private readonly SidebarItemViewModel _allItem;
     private readonly SidebarItemViewModel[] _fixedItems;
 
-    public MainViewModel(GameLibrary library, SettingsService settings, AppPaths paths)
+    /// <param name="installedLaunchers">Launchers found on this PC; only these get a sidebar entry.</param>
+    public MainViewModel(GameLibrary library, SettingsService settings, AppPaths paths, IReadOnlySet<GameSource> installedLaunchers)
     {
+        _installedLaunchers = installedLaunchers;
         _library = library;
         _settings = settings;
         _paths = paths;
@@ -219,7 +222,8 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
         foreach (var item in _fixedItems)
             item.Count = item.IsHeader ? 0 : _games.Count(item.Matches);
 
-        // One entry per source that actually has games, in enum order.
+        // One entry per source that has games, in enum order. Launchers (Steam, Epic...) must also be
+        // installed on this PC; Shortcuts / Manual / Folder scan only need games.
         var bySource = _games.Where(g => !g.IsHidden)
             .GroupBy(g => g.Source)
             .ToDictionary(g => g.Key, g => g.Count());
@@ -232,7 +236,8 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
             bySource.TryGetValue(source, out var count);
             existing.TryGetValue(source, out var item);
 
-            if (count == 0)
+            var isLauncher = GameSourceInfo.Launchers.Contains(source);
+            if (count == 0 || (isLauncher && !_installedLaunchers.Contains(source)))
             {
                 if (item is not null)
                 {

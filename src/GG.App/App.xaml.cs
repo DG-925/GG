@@ -5,7 +5,9 @@ using GG.App.ViewModels;
 using GG.App.Views;
 using GG.Core.Logging;
 using GG.Core.Services;
+using GG.Core.Models;
 using GG.Core.Storage;
+using GG.Scanners;
 
 namespace GG.App;
 
@@ -59,15 +61,24 @@ public partial class App : Application
         _library = new GameLibrary(paths);
         await _library.LoadAsync();
 
+        // Registry/folder checks; quick, but kept off the UI thread.
+        var installedLaunchers = await Task.Run(LauncherDetector.DetectInstalled);
+
         // Development step 1: fill a brand-new library with sample games so the grid has content.
         // They are tagged "sample-" and will be cleared automatically by the first real import.
         if (!_library.ExistedOnDisk)
         {
-            _library.AddRange(SampleData.Create());
+            _library.AddRange(SampleData.Create(installedLaunchers));
             await _library.SaveAsync();
         }
+        else
+        {
+            // Libraries created by the first test build had samples for every launcher; drop the uninstalled ones.
+            _library.RemoveWhere(g => SampleData.IsSample(g)
+                && GameSourceInfo.Launchers.Contains(g.Source) && !installedLaunchers.Contains(g.Source));
+        }
 
-        var window = new MainWindow { DataContext = new MainViewModel(_library, _settings, paths) };
+        var window = new MainWindow { DataContext = new MainViewModel(_library, _settings, paths, installedLaunchers) };
         MainWindow = window;
         if (_smokeTest)
         {

@@ -12,7 +12,11 @@ public static class SampleData
 
     public static bool IsSample(Game game) => game.Id.StartsWith(IdPrefix, StringComparison.Ordinal);
 
-    public static List<Game> Create()
+    /// <param name="installedLaunchers">
+    /// Only launchers in this set get sample games (so the sidebar matches the PC). Null = all launchers.
+    /// Shortcut, manual and folder-scan samples are always included.
+    /// </param>
+    public static List<Game> Create(IReadOnlySet<GameSource>? installedLaunchers = null)
     {
         var entries = new (string Name, GameSource Source)[]
         {
@@ -49,6 +53,8 @@ public static class SampleData
         for (var i = 0; i < entries.Length; i++)
         {
             var (name, source) = entries[i];
+            if (installedLaunchers is not null && GameSourceInfo.Launchers.Contains(source) && !installedLaunchers.Contains(source))
+                continue;
             var played = rng.NextDouble() < 0.6;
             games.Add(new Game
             {

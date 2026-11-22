@@ -437,6 +437,7 @@
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
                             <Setter TargetName="Marker" Property="Visibility" Value="Visible" />
                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                            <Setter Property="FontWeight" Value="Medium" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

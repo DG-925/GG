@@ -165,3 +165,26 @@ public class LibraryStorageTests
         Assert.Equal(games.Count, games.Select(g => g.Id).Distinct().Count());
     }
 }
+
+public class SampleDataTests
+{
+    [Fact]
+    public void Only_installed_launchers_get_sample_games()
+    {
+        var installed = new HashSet<GameSource> { GameSource.Steam };
+
+        var games = SampleData.Create(installed);
+
+        var launcherSources = games.Select(g => g.Source).Where(s => GameSourceInfo.Launchers.Contains(s)).Distinct();
+        Assert.Equal(new[] { GameSource.Steam }, launcherSources);
+        Assert.Contains(games, g => g.Source == GameSource.Shortcut); // non-launcher samples stay
+    }
+
+    [Fact]
+    public void Launcher_detection_never_throws()
+    {
+        // On Windows this reads the real registry; elsewhere it returns an empty set.
+        var installed = GG.Scanners.LauncherDetector.DetectInstalled();
+        Assert.All(installed, s => Assert.Contains(s, GameSourceInfo.Launchers));
+    }
+}
