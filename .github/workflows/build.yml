@@ -17,11 +17,9 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Restore
-        run: dotnet restore GG.sln
-
+      # Build restores for Release itself (Release is self-contained and needs the win-x64 runtime packs).
       - name: Build
-        run: dotnet build GG.sln -c Release --no-restore
+        run: dotnet build GG.sln -c Release
 
       - name: Test
         run: dotnet test tests/GG.Tests -c Release --no-build --logger "console;verbosity=normal"
