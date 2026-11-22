@@ -110,7 +110,7 @@
                 <ControlTemplate TargetType="Button">
                     <Grid x:Name="Root" Width="52" Height="52" RenderTransformOrigin="0.5,0.5">
                         <Grid.RenderTransform>
-                            <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1" />
+                            <ScaleTransform ScaleX="1" ScaleY="1" />
                         </Grid.RenderTransform>
                         <Ellipse x:Name="Circle" Fill="{StaticResource AccentBrush}">
                             <Ellipse.Effect>
@@ -124,8 +124,11 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Circle" Property="Fill" Value="{StaticResource AccentHoverBrush}" />
-                            <Setter TargetName="Scale" Property="ScaleX" Value="1.08" />
-                            <Setter TargetName="Scale" Property="ScaleY" Value="1.08" />
+                            <Setter TargetName="Root" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="1.08" ScaleY="1.08" />
+                                </Setter.Value>
+                            </Setter>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
