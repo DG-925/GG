@@ -15,9 +15,16 @@ public partial class App : Application
     private GameLibrary? _library;
     private SettingsService? _settings;
 
+    /// <summary>
+    /// "--smoke-test": start normally, close by itself once the window has rendered, and exit with
+    /// code 1 if anything threw. CI runs this so startup crashes are caught before you see them.
+    /// </summary>
+    private bool _smokeTest;
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        _smokeTest = e.Args.Contains("--smoke-test", StringComparer.OrdinalIgnoreCase);
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
@@ -28,7 +35,9 @@ public partial class App : Application
             args.SetObserved();
         };
 
-        var paths = AppPaths.Default;
+        // GG_DATA_DIR lets tests/CI use a throwaway data folder instead of %AppData%\GG.
+        var dataDir = Environment.GetEnvironmentVariable("GG_DATA_DIR");
+        var paths = string.IsNullOrWhiteSpace(dataDir) ? AppPaths.Default : new AppPaths(dataDir);
         try
         {
             paths.EnsureCreated();
@@ -60,6 +69,15 @@ public partial class App : Application
 
         var window = new MainWindow { DataContext = new MainViewModel(_library, _settings, paths) };
         MainWindow = window;
+        if (_smokeTest)
+        {
+            window.ContentRendered += async (_, _) =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(3)); // let bindings, hover styles and layout settle
+                Log.Info("Smoke test passed.");
+                Shutdown(0);
+            };
+        }
         window.Show();
     }
 
@@ -86,6 +104,12 @@ public partial class App : Application
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         Log.Error("Unhandled UI exception", e.Exception);
+        if (_smokeTest)
+        {
+            e.Handled = true;
+            Shutdown(1);
+            return;
+        }
         MessageBox.Show(
             $"Something went wrong:\n\n{e.Exception.Message}\n\nDetails were written to the log in %AppData%\\GG\\logs.",
             "GG", MessageBoxButton.OK, MessageBoxImage.Warning);

@@ -27,6 +27,17 @@ jobs:
       - name: Publish single-file exe
         run: dotnet publish src/GG.App/GG.App.csproj -c Release -r win-x64 -o publish
 
+      # Start the real exe with a throwaway data folder; it closes itself after rendering.
+      # Exit code 1 (or hanging) means it crashed on startup; the log is printed either way.
+      - name: Smoke test (start GG.exe)
+        shell: pwsh
+        run: |
+          $env:GG_DATA_DIR = Join-Path $env:RUNNER_TEMP "gg-smoke"
+          $p = Start-Process -FilePath publish/GG.exe -ArgumentList "--smoke-test" -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); Write-Error "GG did not exit within 2 minutes" }
+          Get-Content (Join-Path $env:GG_DATA_DIR "logs/gg.log") -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { Write-Error "GG exited with code $($p.ExitCode)"; exit 1 }
+
       - uses: actions/upload-artifact@v4
         with:
           name: GG-win-x64

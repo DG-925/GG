@@ -21,8 +21,10 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
     private readonly SettingsService _settings;
     private readonly AppPaths _paths;
     private readonly Dispatcher _dispatcher;
-    private readonly ObservableCollection<GameViewModel> _games = new();
-    private readonly ListCollectionView _gamesView;
+    // The grid is rebuilt as a whole (new list + new view) whenever the library changes.
+    // Mutating a view while its refresh is deferred throws in WPF, so we never edit it in place.
+    private List<GameViewModel> _games = new();
+    private ListCollectionView _gamesView;
 
     private readonly SidebarItemViewModel _allItem;
     private readonly SidebarItemViewModel[] _fixedItems;
@@ -34,8 +36,6 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
         _paths = paths;
         _dispatcher = Dispatcher.CurrentDispatcher;
 
-        _gamesView = (ListCollectionView)CollectionViewSource.GetDefaultView(_games);
-        _gamesView.Filter = FilterGame;
 
         // Fixed sidebar entries; launcher entries are added below them as games appear.
         _allItem = new SidebarItemViewModel(SidebarKind.All, "All Games", "");
@@ -54,8 +54,8 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
         // Restore last UI preferences.
         _cardWidth = Math.Clamp(settings.Current.CardWidth, 120, 300);
         _selectedSort = SortOption.All.FirstOrDefault(o => o.Order == settings.Current.SortOrder) ?? SortOption.All[0];
-        _gamesView.CustomSort = new GameComparer(_selectedSort.Order);
         _selectedSidebarItem = _allItem;
+        _gamesView = CreateView(_games);
 
         _library.Changed += (_, _) => _dispatcher.BeginInvoke(ReloadFromLibrary);
         ReloadFromLibrary();
@@ -176,15 +176,23 @@ public sealed partial class MainViewModel : ObservableObject, IGameActions
     /// <summary>Rebuilds the grid from the library (on load and after scans).</summary>
     private void ReloadFromLibrary()
     {
-        using (_gamesView.DeferRefresh())
-        {
-            _games.Clear();
-            foreach (var game in _library.Games)
-                _games.Add(new GameViewModel(game, this));
-        }
+        _games = _library.Games.Select(g => new GameViewModel(g, this)).ToList();
+        _gamesView = CreateView(_games);
+        OnPropertyChanged(nameof(GamesView));
 
         UpdateCounts();
-        ApplyFilter();
+        VisibleCount = _gamesView.Count;
+    }
+
+    /// <summary>A filtered, sorted view over <paramref name="games"/> using the current search/sidebar/sort.</summary>
+    private ListCollectionView CreateView(List<GameViewModel> games)
+    {
+        var view = new ListCollectionView(games)
+        {
+            Filter = FilterGame,
+            CustomSort = new GameComparer(SelectedSort.Order),
+        };
+        return view;
     }
 
     private bool FilterGame(object item)
